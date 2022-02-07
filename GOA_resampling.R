@@ -35,10 +35,28 @@ colnames(sf_40m) <- c("live_coral", "geometry")
 sf_40m$larvae <- round(sf_40m$live_coral)
 sum(sf_40m$larvae) # There are 174435 larvae in this version
 
-## Same, but if all larvae represent 10 larvae (faster computation)
+## Same as above, but if all larvae represent 10 larvae (faster computation)
 sf_40m$larv_red <- round(sf_40m$larvae/10)
 sum(sf_40m$larv_red) # There are 17051 larvae in this version
 
 ## Export to shapefile
 st_write(sf_40m, "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud.shp")
+
+## Coordinates are in meters, so need to redefine as decimal degrees for Parcels
+## From importing the point shapefile above into QGIS, we know the original coordinate system = 32605
+st_crs(sf_40m) = 32605 # We need to define this before reprojecting (otherwise won't know how to reproject)
+
+## Then reproject to a coordinate system with decimal degrees (4326)
+cloud_40 <- st_transform(sf_40m, 4326)
+View(cloud_40) # It appears to have worked. View in QGIS to check (it does).
+
+## Finally, since Parcels needs lat and long in separate fields, define lat and long columns from geometry
+cloud_40 <- cloud_40 %>% mutate(lat = unlist(map(cloud_40$geometry,2)),
+         lon = unlist(map(cloud_40$geometry,1)))
+
+## This reduces lat/lon to 4 significant figures, but upon viewing in QGIS, this retains the grid structure and is accurate to 40m
+
+
+
+
 
