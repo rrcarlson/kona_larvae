@@ -56,7 +56,8 @@ cloud_40 <- cloud_40 %>% mutate(lat = unlist(map(cloud_40$geometry,2)),
 
 ## This reduces lat/lon to 4 significant figures, but upon viewing in QGIS, this retains the grid structure and is accurate to 40m
 
-
-
+## Finally, convert to a csv without geometry column for use in Parcels
+df <- as.data.frame(cloud_40)[, c(1, 3:6)]
+write.csv(df, "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud.csv", row.names = FALSE) # row.names = FALSE removes unlabeled index column in CSV
 
 
