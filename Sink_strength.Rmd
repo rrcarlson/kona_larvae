@@ -6,25 +6,84 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+#Read in packages 
+library(ncdf4)
+library(lubridate)
+library(ggplot2)
+library(ggquiver)
+library(dplyr)
+library(maptools)
+library(sf)
 ```
 
-## R Markdown
+This Rmd demonstrates how to ingest .nc files from Parcels and turn output into a sink strength metric for pre-determined larval settlement sites. First code segments are adapted from Gabi Mukai.
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## 1. Ingest Parcels output
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+# Ingest .nc file from Parcels output
+dat <- nc_open('/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/parcels/out/Test_Larvae_12Feb2022.nc')
 
-```{r cars}
-summary(cars)
+# Extract variables from .nc file (ncdf4 package)
+lo <- ncvar_get(dat, 'lon')
+la <- ncvar_get(dat, 'lat')
+i <- ncvar_get(dat, 'trajectory')
+t  <- ncvar_get(dat, 'time') 
+tunit <- dat$var$time$units
+c.distance <- ncvar_get(dat, 'distance')
+nc_close(dat)
 ```
 
-## Including Plots
+## 2. Map particle paths as continuous lines
+#### 2.i Create a dataframe/sf object from output
 
-You can also embed plots, for example:
+Parcels output takes the form of points every 6 hours, or whatever other timestep you choose (i.e., each parcel's position is recorded each 6 hours). These points need to be converted to a multiline in order to see if the particle paths intersect settlement sites. To do this, convert .nc output to a dataframe.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+# Fetch any variables you want to be in the dataframe and convert to vector
+tvec <- as.vector(t)
+# age <- as.vector(a)
+id <- as.vector(i)
+coord1 <- as.vector(lo)
+coord2 <- as.vector(la)
+# site.no <- as.vector(site.no) # Origin site, will use this later for origin probability mapping
+cum_distance <- as.vector(c.distance)
+
+# Merge data to create dataframe
+traj <- data.frame(tvec, coord1, coord2, cum_distance)
+
+# Attribute data to particle number
+ntraj <- dim(lo)[2] # number of particles/individual trajectories (37)
+ntime <- dim(lo)[1] # number of points per particle (41 - i.e., points logged for each particle every 6 hours for 10 days)
+traj$particle <- rep(1:ntraj, each=ntime) # Add a column to the dataframe of 41 "particle 1s", then 41 "particle 2s", etc.
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+#### 2.ii Transform dataframe to linestring
+
+The dataframe contains a collection of points for each particle. Transform these points into a continuous path.
+
+```{r}
+
+
+line1 <- traj[,c(-1,-4)] %>% # remove variables you don't need (alternatively, can aggregate into one value/path using `summarize`)
+  sf::st_as_sf(coords = c("coord1", "coord2")) %>%
+  sf::st_set_crs(4326) %>% 
+  group_by(particle) %>% 
+  summarize(do_union = FALSE) %>% # This is important: without this, points will be connected at random and you'll get a zigzag
+  sf::st_cast("LINESTRING")
+
+# Check to make sure the geometries/paths look good
+plot(line1$geometry)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
