@@ -23,6 +23,8 @@ This Rmd demonstrates how to ingest .nc files from Parcels and turn output into 
 ```{r}
 # Ingest .nc file from Parcels output
 dat <- nc_open('/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/parcels/out/Test_Larvae_12Feb2022.nc')
+# Load settlement site points
+sites <- read.csv("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/parcels/kona_larvae/tile_sites.csv")
 
 # Extract variables from .nc file (ncdf4 package)
 lo <- ncvar_get(dat, 'lon')
@@ -44,7 +46,7 @@ Parcels output takes the form of points every 6 hours, or whatever other timeste
 tvec <- as.vector(t)
 # age <- as.vector(a)
 id <- as.vector(i)
-coord1 <- as.vector(lo)
+coord1 <- as.vector(lo) - 360 # Remember: since particle data is now in 0 - 360 dd (rather than -180 to 180), we need to convert locations accordingly. It would be easier to just convert settlement site to 0 - 360, but adding a buffer automatically reprojects that data.
 coord2 <- as.vector(la)
 # site.no <- as.vector(site.no) # Origin site, will use this later for origin probability mapping
 cum_distance <- as.vector(c.distance)
@@ -63,8 +65,6 @@ traj$particle <- rep(1:ntraj, each=ntime) # Add a column to the dataframe of 41 
 The dataframe contains a collection of points for each particle. Transform these points into a continuous path.
 
 ```{r}
-
-
 line1 <- traj[,c(-1,-4)] %>% # remove variables you don't need (alternatively, can aggregate into one value/path using `summarize`)
   sf::st_as_sf(coords = c("coord1", "coord2")) %>%
   sf::st_set_crs(4326) %>% 
@@ -76,13 +76,26 @@ line1 <- traj[,c(-1,-4)] %>% # remove variables you don't need (alternatively, c
 plot(line1$geometry)
 ```
 
-```{r}
+## 3. Intersect with settlement sites
 
+Determine whether each particle path crossed settlement sites.
+
+```{r}
+# Convert to sf point object
+sites <- sites %>%
+  st_as_sf(coords = c("lon","lat")) %>% 
+  st_set_crs(4326)
+write_sf(sites, "/Users/rachelcarlson/Desktop/foo2.shp")
+# Buffer sites by 100 m (select best buffer)
+sites100 <- st_buffer(sites, 100) %>% st_transform(crs = 4326)
+sites100$site <- as.character(sites100$site)
+
+# Find intersections between lines and buffered site polygons
+inter <- st_intersects(sites100, line1) # sites goes first, so will list all paths intersecting each site
+inter
 ```
 
-```{r}
 
-```
 
 
 
