@@ -9,35 +9,36 @@ library(sf)
 library(tidyverse)
 
 ## Import GAO data
-gao <- raster("/Users/rachelcarlson/Documents/Research/RS_data/West_Hawaii_CC/West_Hawaii_Island/LiveCoral/ASU_GAO_Hawaii_SW_Live_v2.tif")
-ncell(gao) # There are 1,075,206,200 cells in this raster (resolution 2 m)
+
+# All coral genera
+gao <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_Hawaii_SW_Live_v2.tif")
+gao_W <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/West_Hawaii_merged_CC.tif")
+ncell(gao) # There are 1,075,206,200 cells in the SW Hawaii raster and 2,247,402,650 cells in the NW Hawaii raster (resolution 2 m)
+# Porites for SW Hawaii
+# Pocillopora for SW Hawaii
+# Montipora for SW Hawaii
 
 ## Resample GAO data from 2 m to 40 m, 100 m, and 200 m
 gao_40m <- aggregate(gao, fact = 20)
 gao_100m <- aggregate(gao, fact = 50)
 gao_200m <- aggregate(gao, fact = 100)
-writeRaster(gao_40m, "/Users/rachelcarlson/Documents/Research/RS_data/West_Hawaii_CC/West_Hawaii_Island/LiveCoral/40m_ASU_GAO_Hawaii_SW_Live_v2.tif")
 
-## Convert raster pixels to point cloud
-points_40m <- rasterToPoints(gao_40m) # Function to convert raster to an array of xy coordinates (in m) representing the center of each pixel and pixel value.
-sf_40m <- points_40m %>% as.data.frame %>% sf::st_as_sf(coords = c(1,2)) # Function to convert array to sf object (point shapefile)
-colnames(sf_40m) <- c("live_coral", "geometry")
+RastertoSeed <- function(raster) {
+  # Function to convert raster to an array of xy coordinates (in m) representing the center of each pixel and pixel value.
+  points <- rastertoPoints(raster) ## Convert raster pixels to point cloud
+  sf_larv <- points %>% as.data.frame %>% sf::st_as_sf(coords = c(1,2)) # Function to convert array to sf object (point shapefile)
+  colnames(sf_larv) <- c("live_coral", "geometry")
+  # Create attribute for number of coral larvae each point represents
+          ## The dataframe above has one attribute per point: % live coral cover, ranging from 0 - 64.45%.
+          ## Larvae at each point is proportional to coral cover. Since there are no fractional larvae,
+          ## I will first translate coral cover (i.e., larval amount) to the nearest integer.
+          ## Then, for computational efficiency, I will use each larvae to represent ten larvae, so will find the
+          ## nearest integer to 1/10 coral cover.
+  sf_larv$larvae <- round(sf_larv$live_coral) # Translate coral cover to nearest integer.
+  sf_larv$larv_red <- round(sf_larv$larvae/10) # Same as above, but if all larvae represent 10 larvae (faster computation)
+  return(sf_larv)
+}
 
-## Create attribute for number of coral larvae each point represents
-
-## The dataframe above has one attribute per point: % live coral cover, ranging from 0 - 64.45%.
-## Larvae at each point is proportional to coral cover. Since there are no fractional larvae,
-## I will first translate coral cover (i.e., larval amount) to the nearest integer.
-## Then, for computational efficiency, I will use each larvae to represent ten larvae, so will find the
-## nearest integer to 1/10 coral cover.
-
-## Translate coral cover to nearest integer.
-sf_40m$larvae <- round(sf_40m$live_coral)
-sum(sf_40m$larvae) # There are 174435 larvae in this version
-
-## Same as above, but if all larvae represent 10 larvae (faster computation)
-sf_40m$larv_red <- round(sf_40m$larvae/10)
-sum(sf_40m$larv_red) # There are 17051 larvae in this version
 
 ## Export to shapefile
 st_write(sf_40m, "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud.shp")
@@ -50,7 +51,7 @@ st_crs(sf_40m) = 32605 # We need to define this before reprojecting (otherwise w
 cloud_40 <- st_transform(sf_40m, 4326)
 View(cloud_40) # It appears to have worked. View in QGIS to check (it does).
 
-## Finally, since Parcels needs lat and long in separate fields, define lat and long columns from geometry
+## Finally, since Parcels needs lat and lon in separate fields, define lat and long columns from geometry
 cloud_40 <- cloud_40 %>% mutate(lat = unlist(map(cloud_40$geometry,2)),
          lon = unlist(map(cloud_40$geometry,1)))
 

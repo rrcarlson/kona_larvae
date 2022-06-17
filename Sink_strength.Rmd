@@ -22,7 +22,7 @@ This Rmd demonstrates how to ingest .nc files from Parcels and turn output into 
 
 ```{r}
 # Ingest .nc file from Parcels output
-dat <- nc_open('/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/parcels/out/Test_Larvae_12Feb2022.nc')
+dat <- nc_open('/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/parcels/out/Test_Larvae_22April2022.v4.nc')
 # Load settlement site points
 sites <- read.csv("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/parcels/kona_larvae/tile_sites.csv")
 
@@ -56,8 +56,8 @@ traj <- data.frame(tvec, coord1, coord2, cum_distance)
 
 # Attribute data to particle number
 ntraj <- dim(lo)[2] # number of particles/individual trajectories (37)
-ntime <- dim(lo)[1] # number of points per particle (41 - i.e., points logged for each particle every 6 hours for 10 days)
-traj$particle <- rep(1:ntraj, each=ntime) # Add a column to the dataframe of 41 "particle 1s", then 41 "particle 2s", etc.
+ntime <- dim(lo)[1] # number of points per particle (# of points logged for each particle, e.g., every 6 hours for 10 days)
+traj$particle <- rep(1:ntraj, each=ntime) # Add a column to the dataframe of ntime "particle 1s", then ntime "particle 2s", etc.
 ```
 
 #### 2.ii Transform dataframe to linestring
@@ -65,15 +65,25 @@ traj$particle <- rep(1:ntraj, each=ntime) # Add a column to the dataframe of 41 
 The dataframe contains a collection of points for each particle. Transform these points into a continuous path.
 
 ```{r}
+# Get rid of any NA coordinates (make sure to ONLY do this after traj$particle is set)
+traj <- traj %>% dplyr::filter(!is.na(coord1))
+# traj <- traj %>% dplyr::filter(!is.na(coord2))
+
 line1 <- traj[,c(-1,-4)] %>% # remove variables you don't need (alternatively, can aggregate into one value/path using `summarize`)
   sf::st_as_sf(coords = c("coord1", "coord2")) %>%
   sf::st_set_crs(4326) %>% 
   group_by(particle) %>% 
-  summarize(do_union = FALSE) %>% # This is important: without this, points will be connected at random and you'll get a zigzag
+  dplyr::summarize(do_union = FALSE) %>% # This is important: without this, points will be connected at random and you'll get a zigzag
   sf::st_cast("LINESTRING")
 
 # Check to make sure the geometries/paths look good
 plot(line1$geometry)
+
+# Plot just a subset
+plot(line1[c(200:210,300:310),]$geometry)
+
+# Write out the trajectories
+st_write(line1,"/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/parcels/out/tracks/tracks_22April2022.v4.shp")
 ```
 
 ## 3. Intersect with settlement sites
