@@ -10,16 +10,17 @@ library(tidyverse)
 
 ## Import GAO data
 
-# All coral genera
-gao <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_Hawaii_SW_Live_v2.tif")
-gao_W <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/West_Hawaii_merged_CC.tif")
+# All coral genera. Added aggregate(fact = 20) to resample GAO to 40 m
+gao <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_Hawaii_SW_Live_v2.tif") %>% aggregate(fact = 20)
+gao_W <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/West_Hawaii_merged_CC.tif") %>% aggregate(fact = 20)
 ncell(gao) # There are 1,075,206,200 cells in the SW Hawaii raster and 2,247,402,650 cells in the NW Hawaii raster (resolution 2 m)
 # Porites for SW Hawaii
+Por <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Porites.tif") %>% aggregate(fact = 20)
 # Pocillopora for SW Hawaii
+Poc <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Pocillopora.tif") %>% aggregate(fact = 20)
 # Montipora for SW Hawaii
+Mon <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Montipora.tif") %>% aggregate(fact = 20)
 
-## Resample GAO data from 2 m to 40 m, 100 m, and 200 m
-gao_40m <- aggregate(gao, fact = 20)
 # gao_100m <- aggregate(gao, fact = 50)
 # gao_200m <- aggregate(gao, fact = 100)
 
@@ -77,7 +78,6 @@ PointsOutside <- function(hycom_bound, sf_larv, snapped_fp) {
   return(final_cloud)
   }
 
-PointsOutside(pf, foo, )
 
 # QA/QC
 sum(!is.na(final_cloud$NEAR_DIST)) # Check to make sure this is the # of snapped points (e.g., 7110)
