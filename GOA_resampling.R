@@ -15,11 +15,11 @@ gao <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_p
 gao_W <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/West_Hawaii_merged_CC.tif") %>% aggregate(fact = 20)
 ncell(gao) # There are 1,075,206,200 cells in the SW Hawaii raster and 2,247,402,650 cells in the NW Hawaii raster (resolution 2 m)
 # Porites for SW Hawaii
-Por <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Porites.tif") %>% aggregate(fact = 20)
+Por <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Porites.tif") %>% aggregate(fact = 20, fun = max)
 # Pocillopora for SW Hawaii
-Poc <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Pocillopora.tif") %>% aggregate(fact = 20)
+Poc <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Pocillopora.tif") %>% aggregate(fact = 20, fun = max)
 # Montipora for SW Hawaii
-Mon <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Montipora.tif") %>% aggregate(fact = 20)
+Mon <- raster("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/ASU_GAO_SfMCover_v1_All_Montipora.tif") %>% aggregate(fact = 20, fun = max)
 
 # gao_100m <- aggregate(gao, fact = 50)
 # gao_200m <- aggregate(gao, fact = 100)
@@ -47,6 +47,7 @@ RastertoSeed <- function(raster) {
           ## nearest integer to 1/10 coral cover.
   sf_larv$larvae <- round(sf_larv$live_coral) # Translate coral cover to nearest integer.
   sf_larv$larv_red <- round(sf_larv$larvae/10) # Same as above, but if all larvae represent 10 larvae (faster computation)
+  sf_larv$larv_inf <- round(sf_larv$live_coral*100) # Same as above, but if all larvae are magnified by 100 (better to pick up genera like Montipora)
   ## Coordinates are in meters, so need to redefine as decimal degrees for Parcels
   ## From importing the point shapefile above into QGIS, we know the original coordinate system = 32605
   st_crs(sf_larv) <- 32605 # We need to define this before reprojecting (otherwise won't know how to reproject)
@@ -57,26 +58,33 @@ RastertoSeed <- function(raster) {
   return(sf_larv) 
 }
 
-foo <- RastertoSeed(gao_40m)
+# Create list comprised of the complete larval point cloud
+pointcloud_list <- lapply(c(gao, Por, Poc, Mon), RastertoSeed)
+
+# Write output to generate "snapped" (see below) in ArcGIS
+st_write(pointcloud_list[[1]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_all.shp")
+st_write(pointcloud_list[[2]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_Por.shp")
+st_write(pointcloud_list[[3]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_Poc.shp")
+st_write(pointcloud_list[[4]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_Mon.shp")
 
 
 ### Function to subset larvae points that fall in NA area of HYCOM data
 # hycom_bound = a polygon representing the boundary of current data
 # sf_larv = an sf object representing a larval cloud (output of RastertoSeed)
-# snapped = fp for a shapefile processed from sf_larv in ArcGIS using the 'Near' tool. These are points from output of RastertoSeed, snapped to the nearest HYCOM boundary line (follow https://support.esri.com/en/technical-article/000021426 to find XNear/YNear, new x and y for points outside of HYCOM)
-PointsOutside <- function(hycom_bound, sf_larv, snapped_fp) {
-  # Intersect points and HYCOM boundary polygon
-  inter_points <- st_intersects(sf_larv, hycom_bound) # This gives you a list of 15600 points (for all coral) where row is 1 if intersects, (empty) if doesn't intersect
-  b <- sapply(inter_points,function(x){length(x)==0}) # This gives a logical vector of length 15600 (or other sf_larv length) with TRUE/FALSE intersects
-  sf_in <- sf_larv[!b,] # !b is points inside HYCOM boundary. !b SHOULD be the inverse of the b vector, i.e., those points that DO NOT intersect-but weirdly, it's the opposite
-  snapped <- st_read(snapped_fp) %>% # Snapped will end up only being points outside the HYCOM boundary
-    as_data_frame() %>% 
-    select(-c(geometry,NEAR_FID)) %>% # Default geometry is original lat/lon, need to reset
-    st_as_sf(coords = c("NEAR_X", "NEAR_Y")) %>% # Convert to CSV and back to sf with new, nearest HYCOM boundary lat/lon
-    sf::st_set_crs(4326)
-  final_cloud <- bind_rows(sf_in,snapped) %>% select(-c(lat,lon))
-  return(final_cloud)
-  }
+# snapped = fp for a shapefile processed from sf_larv in ArcGIS using the 'Near' tool. These are also points from output of RastertoSeed, but snapped in ArcGIS to the nearest HYCOM boundary line (follow https://support.esri.com/en/technical-article/000021426 to find XNear/YNear, new x and y for points outside of HYCOM)
+# PointsOutside <- function(hycom_bound, sf_larv, snapped_fp) {
+#   # Intersect points and HYCOM boundary polygon
+#   inter_points <- st_intersects(sf_larv, hycom_bound) # This gives you a list of 15600 points (for all coral) where row is 1 if intersects, (empty) if doesn't intersect
+#   b <- sapply(inter_points,function(x){length(x)==0}) # This gives a logical vector of length 15600 (or other sf_larv length) with TRUE/FALSE intersects
+#   sf_in <- sf_larv[!b,] # !b is points inside HYCOM boundary. !b SHOULD be the inverse of the b vector, i.e., those points that DO NOT intersect-but weirdly, it's the opposite
+#   snapped <- st_read(snapped_fp) %>% # Snapped will end up only being points outside the HYCOM boundary
+#     as_data_frame() %>% 
+#     select(-c(geometry,NEAR_FID)) %>% # Default geometry is original lat/lon, need to reset
+#     st_as_sf(coords = c("NEAR_X", "NEAR_Y")) %>% # Convert to CSV and back to sf with new, nearest HYCOM boundary lat/lon
+#     sf::st_set_crs(4326)
+#   final_cloud <- bind_rows(sf_in,snapped) %>% select(-c(lat,lon))
+#   return(final_cloud)
+# }
 
 
 # QA/QC
