@@ -61,34 +61,39 @@ RastertoSeed <- function(raster) {
 # Create list comprised of the complete larval point cloud
 pointcloud_list <- lapply(c(gao, Por, Poc, Mon), RastertoSeed)
 
-# Write output to generate "snapped" (see below) in ArcGIS
+# Write output to use in the 'Near' tool. These are points from RastertoSeed, but snapped in ArcGIS to the nearest HYCOM boundary line (follow https://support.esri.com/en/technical-article/000021426 to find XNear/YNear, new x and y for points outside of HYCOM)
+
 st_write(pointcloud_list[[1]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_all.shp")
 st_write(pointcloud_list[[2]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_Por.shp")
 st_write(pointcloud_list[[3]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_Poc.shp")
 st_write(pointcloud_list[[4]], "/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_Mon.shp")
 
+# Function to process post-Arc files
+PointsOutside <- function(snapped_fp) {
+  snapped <- st_read(snapped_fp) %>%
+    sf::st_set_crs(4326)
+    snapped$new_NEARX <- snapped$NEAR_X + 360
+    snapped <- snapped %>% as_data_frame() %>%
+    select(-c(geometry,NEAR_FID))
+  return(snapped)
+}
+
+# Read in files after processing in Arc, clean, and write out to csv
+
+"/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_output/snapped_all.shp" %>% PointsOutside() %>% write.csv("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/parcels_input/all_21June22.csv")
+"/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_output/snapped_Por.shp" %>% PointsOutside() %>% write.csv("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/parcels_input/Por_21June22.csv")
+"/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_output/snapped_Poc.shp" %>% PointsOutside() %>% write.csv("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/parcels_input/Poc_21June22.csv")
+"/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/GAO input/snapped/snapped_output/snapped_Mon.shp" %>% PointsOutside() %>% write.csv("/Users/rachelcarlson/Documents/Research/Larvae/Data/Primary/gao_pointcloud/parcels_input/Mon_21June22.csv")
 
 ### Function to subset larvae points that fall in NA area of HYCOM data
 # hycom_bound = a polygon representing the boundary of current data
 # sf_larv = an sf object representing a larval cloud (output of RastertoSeed)
 # snapped = fp for a shapefile processed from sf_larv in ArcGIS using the 'Near' tool. These are also points from output of RastertoSeed, but snapped in ArcGIS to the nearest HYCOM boundary line (follow https://support.esri.com/en/technical-article/000021426 to find XNear/YNear, new x and y for points outside of HYCOM)
-# PointsOutside <- function(hycom_bound, sf_larv, snapped_fp) {
-#   # Intersect points and HYCOM boundary polygon
-#   inter_points <- st_intersects(sf_larv, hycom_bound) # This gives you a list of 15600 points (for all coral) where row is 1 if intersects, (empty) if doesn't intersect
-#   b <- sapply(inter_points,function(x){length(x)==0}) # This gives a logical vector of length 15600 (or other sf_larv length) with TRUE/FALSE intersects
-#   sf_in <- sf_larv[!b,] # !b is points inside HYCOM boundary. !b SHOULD be the inverse of the b vector, i.e., those points that DO NOT intersect-but weirdly, it's the opposite
-#   snapped <- st_read(snapped_fp) %>% # Snapped will end up only being points outside the HYCOM boundary
-#     as_data_frame() %>% 
-#     select(-c(geometry,NEAR_FID)) %>% # Default geometry is original lat/lon, need to reset
-#     st_as_sf(coords = c("NEAR_X", "NEAR_Y")) %>% # Convert to CSV and back to sf with new, nearest HYCOM boundary lat/lon
-#     sf::st_set_crs(4326)
-#   final_cloud <- bind_rows(sf_in,snapped) %>% select(-c(lat,lon))
-#   return(final_cloud)
-# }
+
 
 
 # QA/QC
-sum(!is.na(final_cloud$NEAR_DIST)) # Check to make sure this is the # of snapped points (e.g., 7110)
+sum(!is.na(Mon$NEAR_DIST)) # Check to make sure this is the # of snapped points (e.g., 7110)
 nrow(snapped) # Should be identical
 final_cloud_csv <- as.data.frame(cloud_40) %>% select(-geometry) # Finally, convert to a csv without geometry column for use in Parcels
 
@@ -154,3 +159,8 @@ df$newlon <- df$lon + 360 # We'll use -180/180 version here, but this gives us t
 ## Convert to point sf object
 sf <- df %>% st_as_sf(coords = c("lon", "lat")) %>%
   sf::st_set_crs(4326)
+
+# Intersect points and HYCOM boundary polygon
+inter_points <- st_intersects(sf_larv, hycom_bound) # This gives you a list of 15600 points (for all coral) where row is 1 if intersects, (empty) if doesn't intersect
+b <- sapply(inter_points,function(x){length(x)==0}) # This gives a logical vector of length 15600 (or other sf_larv length) with TRUE/FALSE intersects
+sf_in <- sf_larv[!b,] # !b is points inside HYCOM boundary. !b SHOULD be the inverse of the b vector, i.e., those points that DO NOT intersect-but weirdly, it's the opposite
